@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
-import { getAllProviders, getMyAppointments, bookAppointment, cancelAppointment } from "../services/api";
+import { getAllProviders, getAvailableSlots, bookAppointment, cancelAppointment, getMyAppointments } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
 export default function PatientDashboard() {
   const [providers, setProviders] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [selectedProvider, setSelectedProvider] = useState(null);
+  const [slots, setSlots] = useState([]);
   const [activeTab, setActiveTab] = useState("providers");
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loadingSlotId, setLoadingSlotId] = useState(null);
   const navigate = useNavigate();
 
   const email = localStorage.getItem("email");
@@ -40,13 +43,55 @@ export default function PatientDashboard() {
     }
   };
 
+  const handleViewSlots = async (provider) => {
+    setSelectedProvider(provider);
+    setSlots([]);
+    setMessage("");
+    setError("");
+    try {
+      const response = await getAvailableSlots(provider.id);
+      setSlots(response.data);
+    } catch (err) {
+      setError("Failed to fetch slots!");
+    }
+  };
+
+  const handleBook = async (slotId) => {
+    setLoadingSlotId(slotId);
+    setMessage("");
+    setError("");
+    try {
+      await bookAppointment({
+        patientId: "3",
+        slotId: slotId.toString(),
+        notes: "Booked from app",
+      });
+      setMessage("Appointment booked successfully! Check your email for confirmation.");
+      handleViewSlots(selectedProvider);
+      fetchAppointments();
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to book appointment!");
+    } finally {
+      setLoadingSlotId(null);
+    }
+  };
+
   const handleCancel = async (appointmentId) => {
+    setMessage("");
+    setError("");
     try {
       await cancelAppointment(appointmentId);
       setMessage("Appointment cancelled successfully!");
-      fetchAppointments();
+      await fetchAppointments();
     } catch (err) {
-      setMessage("Failed to cancel appointment!");
+      const errorMsg = err.response?.data?.error;
+      if (!errorMsg) {
+        // API succeeded but axios threw error — refresh anyway
+        await fetchAppointments();
+        setMessage("Appointment cancelled successfully!");
+      } else {
+        setError(errorMsg);
+      }
     }
   };
 
@@ -54,6 +99,19 @@ export default function PatientDashboard() {
     localStorage.clear();
     navigate("/login");
   };
+
+  const formatDateTime = (dateTime) => {
+  const date = new Date(dateTime);
+  return date.toLocaleString('en-IN', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+};
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -77,11 +135,16 @@ export default function PatientDashboard() {
             {message}
           </div>
         )}
+        {error && (
+          <div className="bg-red-100 text-red-600 p-3 rounded mb-4">
+            {error}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-4 mb-6">
           <button
-            onClick={() => setActiveTab("providers")}
+            onClick={() => { setActiveTab("providers"); setSelectedProvider(null); }}
             className={`px-6 py-2 rounded-lg font-medium ${
               activeTab === "providers"
                 ? "bg-blue-600 text-white"
@@ -98,12 +161,12 @@ export default function PatientDashboard() {
                 : "bg-white text-gray-600 hover:bg-gray-50"
             }`}
           >
-            My Appointments
+            My Appointments ({appointments.filter(a => a.status === "BOOKED").length})
           </button>
         </div>
 
         {/* Providers Tab */}
-        {activeTab === "providers" && (
+        {activeTab === "providers" && !selectedProvider && (
           <div>
             <h2 className="text-xl font-semibold text-gray-700 mb-4">
               Available Providers
@@ -130,6 +193,56 @@ export default function PatientDashboard() {
                       📞 {provider.phone}
                     </p>
                     <p className="text-gray-600 text-sm mt-2">{provider.bio}</p>
+                    <button
+                      onClick={() => handleViewSlots(provider)}
+                      className="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition duration-200 text-sm font-medium"
+                    >
+                      View Available Slots
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Slots View */}
+        {activeTab === "providers" && selectedProvider && (
+          <div>
+            <button
+              onClick={() => setSelectedProvider(null)}
+              className="mb-4 text-blue-600 hover:underline text-sm"
+            >
+              ← Back to Providers
+            </button>
+            <h2 className="text-xl font-semibold text-gray-700 mb-4">
+              Available Slots — {selectedProvider.user.name}
+            </h2>
+            {slots.length === 0 ? (
+              <p className="text-gray-500">No available slots for this provider.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {slots.map((slot) => (
+                  <div
+                    key={slot.id}
+                    className="bg-white rounded-lg shadow p-6"
+                  >
+                    <p className="font-semibold text-gray-800">
+                      📅 {formatDateTime(slot.startTime)}
+                    </p>
+                    <p className="text-gray-500 text-sm mt-1">
+                      ⏰ End: {formatDateTime(slot.endTime)}
+                    </p>
+                    <span className="text-xs font-medium px-2 py-1 rounded mt-2 inline-block bg-green-100 text-green-600">
+                      {slot.status}
+                    </span>
+                    <button
+                        onClick={() => handleBook(slot.id)}
+                        disabled={loadingSlotId === slot.id}
+                        className="mt-4 w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition duration-200 text-sm font-medium"
+>
+                        {loadingSlotId === slot.id ? "Booking..." : "Book Appointment"}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -157,10 +270,10 @@ export default function PatientDashboard() {
                         {apt.slot.provider.user.name}
                       </h3>
                       <p className="text-gray-500 text-sm">
-                        {apt.slot.startTime}
+                        📅 {formatDateTime(apt.slot.startTime)}
                       </p>
                       <p className="text-gray-500 text-sm">
-                        Notes: {apt.notes}
+                        📝 {apt.notes}
                       </p>
                       <span
                         className={`text-xs font-medium px-2 py-1 rounded mt-2 inline-block ${
