@@ -42,7 +42,6 @@ export default function PatientDashboard() {
       setAppointments(response.data);
     } catch (err) {
       console.error("Error fetching appointments", err);
-      // Don't show error to user for background fetch
     }
   };
 
@@ -65,7 +64,7 @@ export default function PatientDashboard() {
     setError("");
     try {
       await bookAppointment({
-        patientId: "3",
+        patientId: localStorage.getItem("userId"),
         slotId: slotId.toString(),
         notes: "Booked from app",
       });
@@ -79,12 +78,13 @@ export default function PatientDashboard() {
       } else if (errorMsg.includes("not available")) {
         setError("This slot is no longer available!");
       } else if (err.response?.status === 403) {
-        // Token expired — logout
         localStorage.clear();
         navigate("/login");
       } else {
         setError("Failed to book appointment. Please try again!");
       }
+    } finally {
+      setLoadingSlotId(null);
     }
   };
 
@@ -96,7 +96,6 @@ export default function PatientDashboard() {
       setMessage("Appointment cancelled successfully!");
       await fetchAppointments();
     } catch (err) {
-      // If error but appointment might still be cancelled — refresh anyway
       await fetchAppointments();
       setMessage("Appointment cancelled successfully!");
     }
@@ -108,21 +107,20 @@ export default function PatientDashboard() {
   };
 
   const formatDateTime = (dateTime) => {
-  const date = new Date(dateTime);
-  return date.toLocaleString('en-IN', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  });
-};
+    const date = new Date(dateTime);
+    return date.toLocaleString('en-IN', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Navbar */}
       <nav className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">Appointment Booking System</h1>
         <div className="flex items-center gap-4">
@@ -148,7 +146,6 @@ export default function PatientDashboard() {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="flex gap-4 mb-6">
           <button
             onClick={() => { setActiveTab("providers"); setSelectedProvider(null); }}
@@ -172,7 +169,6 @@ export default function PatientDashboard() {
           </button>
         </div>
 
-        {/* Providers Tab */}
         {activeTab === "providers" && !selectedProvider && (
           <div>
             <h2 className="text-xl font-semibold text-gray-700 mb-4">
@@ -183,22 +179,13 @@ export default function PatientDashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {providers.map((provider) => (
-                  <div
-                    key={provider.id}
-                    className="bg-white rounded-lg shadow p-6"
-                  >
+                  <div key={provider.id} className="bg-white rounded-lg shadow p-6">
                     <h3 className="text-lg font-semibold text-gray-800">
                       {provider.user.name}
                     </h3>
-                    <p className="text-blue-600 text-sm mt-1">
-                      {provider.specialty}
-                    </p>
-                    <p className="text-gray-500 text-sm mt-1">
-                      📍 {provider.location}
-                    </p>
-                    <p className="text-gray-500 text-sm mt-1">
-                      📞 {provider.phone}
-                    </p>
+                    <p className="text-blue-600 text-sm mt-1">{provider.specialty}</p>
+                    <p className="text-gray-500 text-sm mt-1">📍 {provider.location}</p>
+                    <p className="text-gray-500 text-sm mt-1">📞 {provider.phone}</p>
                     <p className="text-gray-600 text-sm mt-2">{provider.bio}</p>
                     <button
                       onClick={() => handleViewSlots(provider)}
@@ -213,7 +200,6 @@ export default function PatientDashboard() {
           </div>
         )}
 
-        {/* Slots View */}
         {activeTab === "providers" && selectedProvider && (
           <div>
             <button
@@ -230,10 +216,7 @@ export default function PatientDashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {slots.map((slot) => (
-                  <div
-                    key={slot.id}
-                    className="bg-white rounded-lg shadow p-6"
-                  >
+                  <div key={slot.id} className="bg-white rounded-lg shadow p-6">
                     <p className="font-semibold text-gray-800">
                       📅 {formatDateTime(slot.startTime)}
                     </p>
@@ -244,11 +227,11 @@ export default function PatientDashboard() {
                       {slot.status}
                     </span>
                     <button
-                        onClick={() => handleBook(slot.id)}
-                        disabled={loadingSlotId === slot.id}
-                        className="mt-4 w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition duration-200 text-sm font-medium"
->
-                        {loadingSlotId === slot.id ? "Booking..." : "Book Appointment"}
+                      onClick={() => handleBook(slot.id)}
+                      disabled={loadingSlotId === slot.id}
+                      className="mt-4 w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition duration-200 text-sm font-medium"
+                    >
+                      {loadingSlotId === slot.id ? "Booking..." : "Book Appointment"}
                     </button>
                   </div>
                 ))}
@@ -257,7 +240,6 @@ export default function PatientDashboard() {
           </div>
         )}
 
-        {/* Appointments Tab */}
         {activeTab === "appointments" && (
           <div>
             <h2 className="text-xl font-semibold text-gray-700 mb-4">
@@ -279,9 +261,7 @@ export default function PatientDashboard() {
                       <p className="text-gray-500 text-sm">
                         📅 {formatDateTime(apt.slot.startTime)}
                       </p>
-                      <p className="text-gray-500 text-sm">
-                        📝 {apt.notes}
-                      </p>
+                      <p className="text-gray-500 text-sm">📝 {apt.notes}</p>
                       <span
                         className={`text-xs font-medium px-2 py-1 rounded mt-2 inline-block ${
                           apt.status === "BOOKED"

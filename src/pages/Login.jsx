@@ -25,6 +25,7 @@ export default function Login() {
       const payload = JSON.parse(atob(token.split(".")[1]));
       const role = payload.role;
       localStorage.setItem("role", role);
+      localStorage.setItem("userId", payload.userId);
 
       if (role === "PATIENT") navigate("/patient-dashboard");
       else if (role === "PROVIDER") navigate("/provider-dashboard");
