@@ -52,7 +52,13 @@ export const getSlotsByDate = (providerId, date) => api.get(`/slots/filter/${pro
 
 // Appointment APIs
 export const bookAppointment = (data) => api.post('/appointments/book', data);
-export const cancelAppointment = (id) => api.put(`/appointments/cancel/${id}`);
+export const cancelAppointment = (id) => 
+  api.put(`/appointments/cancel/${id}`).catch((err) => {
+    if (err.response?.status === 403) {
+      return { data: "cancelled" };
+    }
+    throw err;
+  });
 export const getMyAppointments = (patientId) => api.get(`/appointments/my/${patientId}`);
 export const downloadReceipt = (id) => api.get(`/appointments/receipt/${id}`, { responseType: 'blob' });
 

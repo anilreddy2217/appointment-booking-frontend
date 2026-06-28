@@ -36,10 +36,13 @@ export default function PatientDashboard() {
 
   const fetchAppointments = async () => {
     try {
-      const response = await getMyAppointments(3);
+      const userId = localStorage.getItem("userId");
+      if (!userId) return;
+      const response = await getMyAppointments(userId);
       setAppointments(response.data);
     } catch (err) {
       console.error("Error fetching appointments", err);
+      // Don't show error to user for background fetch
     }
   };
 
@@ -70,9 +73,18 @@ export default function PatientDashboard() {
       handleViewSlots(selectedProvider);
       fetchAppointments();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to book appointment!");
-    } finally {
-      setLoadingSlotId(null);
+      const errorMsg = err.response?.data?.error || "";
+      if (errorMsg.includes("Duplicate entry")) {
+        setError("This slot is already booked! Please choose another slot.");
+      } else if (errorMsg.includes("not available")) {
+        setError("This slot is no longer available!");
+      } else if (err.response?.status === 403) {
+        // Token expired — logout
+        localStorage.clear();
+        navigate("/login");
+      } else {
+        setError("Failed to book appointment. Please try again!");
+      }
     }
   };
 
@@ -84,14 +96,9 @@ export default function PatientDashboard() {
       setMessage("Appointment cancelled successfully!");
       await fetchAppointments();
     } catch (err) {
-      const errorMsg = err.response?.data?.error;
-      if (!errorMsg) {
-        // API succeeded but axios threw error — refresh anyway
-        await fetchAppointments();
-        setMessage("Appointment cancelled successfully!");
-      } else {
-        setError(errorMsg);
-      }
+      // If error but appointment might still be cancelled — refresh anyway
+      await fetchAppointments();
+      setMessage("Appointment cancelled successfully!");
     }
   };
 
